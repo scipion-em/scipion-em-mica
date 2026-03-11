@@ -23,18 +23,18 @@ with open('requirements.txt') as f:
 # Fields marked as "Optional" may be commented out.
 
 setup(
-    name='scipion-chem-drugclip',  # Required
-    version='4.1.4',  # Required
-    description='Scipion plugin in order to use the DrugCLIP software',  # Required
+    name='scipion-em-mica',  # Required
+    version='0.1',  # Required
+    description='Scipion plugin in order to use the MICA software',  # Required
     long_description=long_description,  # Optional
-    url='https://github.com/scipion-chem/scipion-chem-drugclip',  # Optional
+    url='https://github.com/scipion-em/scipion-em-mica',  # Optional
     author='Blanca Pueche',  # Optional
     author_email='blanca.pueche@cnb.csic.es',  # Optional
-    keywords='scipion drugclip scipion-3.0 cheminformatics',  # Optional
+    keywords='scipion mica scipion-3.0 cheminformatics',  # Optional
     packages=find_packages(),
     install_requires=[requirements],
-    entry_points={'pyworkflow.plugin': 'drugclip = drugclip'},
+    entry_points={'pyworkflow.plugin': 'mica = mica'},
     package_data={  # Optional
-       'drugclip': [ 'protocols.conf'],
+       'mica': [ 'protocols.conf'],
     }
 )

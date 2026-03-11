@@ -4,5 +4,5 @@
 # Find documentation here: https://scipion-em.github.io/docs/docs/developer/creating-a-protocol
 # **************************************************************************
 
-from .protocol_drugclip import ProtDrugclip
+from .protocol_mica import ProtMICA
 

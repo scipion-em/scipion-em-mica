@@ -25,5 +25,6 @@
 # **************************************************************************
 
 
-DRUGCLIP_DIC = {'name': 'drugclip', 'version': '0.1', 'home': 'DRUGCLIP_HOME'}
+MICA_DIC = {'name': 'mica', 'version': '1.0', 'home': 'MICA_HOME'}
+PHENIX_DIC = {'home': 'PHENIX_HOME'}
 
