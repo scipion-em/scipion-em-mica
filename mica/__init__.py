@@ -77,7 +77,9 @@ class Plugin(pwchemPlugin):
     def checkPhenix(cls):
         phenix = shutil.which("phenix.real_space_refine")
 
-        if phenix is None:
+        if phenix is not None:
+            print("phenix already installed!")
+        elif phenix is None:
             raise Exception(
                 "\nMICA requires PHENIX.\n"
                 "Please install Phenix and ensure 'phenix.real_space_refine' "

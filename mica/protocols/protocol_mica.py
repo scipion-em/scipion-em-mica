@@ -23,11 +23,14 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, csv
+import os, csv, tempfile, shutil, glob
 import pyworkflow.protocol.params as params
-from mica import DRUGCLIP_DIC
+from mica import MICA_DIC
 from pwem.protocols import EMProtocol
 from pyworkflow.object import String
+
+from pwem.convert.atom_struct import pdbToCif
+
 
 from pwchem import Plugin
 from pwchem.objects import  SetOfStructROIs, StructROI
@@ -60,138 +63,92 @@ class ProtMICA(EMProtocol):
                        help="Comma-separated GPU devices that can be used.")
 
         form.addSection(label='Input')
-        form.addParam('pockets', params.PointerParam,
-                      pointerClass='SetOfStructROIs', allowsNull=False,
-                      label="ROIs: ",
-                      help='Select the input ROIs.')
+        form.addParam('inputVolume', params.PointerParam, allowsNull=False,
+                      pointerClass='Volume',
+                      label="Input volume: ",
+                      help='Select the electron map of the structure in MRC2014')
 
-        form.addParam('molecules', params.PointerParam,
-                      pointerClass='SetOfSmallMolecules', allowsNull=False,
-                      label="Molecules: ",
-                      help='Select the molecules to use.')
+        form.addParam('resolution', params.FloatParam,
+                      default=0.0,
+                      label='Resolution: ',
+                      help='Map resolution.')
+        form.addParam('contourLevel', params.FloatParam,
+                      default=0.0,
+                      label='Contour level: ',
+                      help='Map contour level.')
 
-        form.addParam('useManager', params.EnumParam, default=1, label='Manage structure using: ',
-                      choices=['RDKit', 'OpenBabel'],
-                      help='Whether to manage the structure (conversion to SMILES) using RDKit or OpenBabel')
+        form.addParam('inputSeq', params.PointerParam, allowsNull=False,
+                      pointerClass="Sequence",
+                      label="Input Sequence: ",
+                      help="Input sequence.")
 
-        group = form.addGroup('Parameters')
-        group.addParam('batchSize', params.IntParam, default=8,
-                       label='Batch size: ',
-                       help='Number of molecules processed per batch.')
-        group.addParam('maxPocketAtoms', params.IntParam, default=256,
-                       label='Max. atoms per pocket: ',
-                       help='Maximum number for atoms per pocket.')
+        form.addParam('inputStructure', params.PointerParam, allowsNull=False,
+                      pointerClass='AtomStruct',
+                      label="Input AF3 prediction: ",
+                      help='Select the AF3 predicted structure.')
 
 
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.getSmilesStep)
-        self._insertFunctionStep(self.convertFilesStep)
-        self._insertFunctionStep(self.runDrugclipStep)
-        self._insertFunctionStep(self.createOutputStep)
+        self._insertFunctionStep(self.moveFilesStep)
+        self._insertFunctionStep(self.runMicaStep)
+        #self._insertFunctionStep(self.createOutputStep)
 
-    def getSmilesStep(self):
-        outputFile = self._getPath('smiles.txt')
-        self.smiToFile = {}
+    def moveFilesStep(self):
+        baseFolder = self._getPath('input')
+        name, ext = os.path.splitext(os.path.basename(self.inputStructure.get().getFileName()))
+        print(name)
+        #mapId = self.getMapId()
+        mapId = 0
+        idFolder = os.path.join(baseFolder, str(mapId))
+        os.makedirs(idFolder, exist_ok=True)
+        self.idFolder = idFolder
 
-        with open(outputFile, 'w') as out:
-            for mol in self.molecules.get():
+        resultsFolder = os.path.join(idFolder, f"AF3_results/{name}_1")
+        os.makedirs(resultsFolder, exist_ok=True)
+        self.resultsFolder = resultsFolder
 
-                molFile = (os.path.abspath(mol.getPoseFile())
-                           if mol.getPoseFile()
-                           else os.path.abspath(mol.getFileName()))
+        map = os.path.abspath(self.inputVolume.get().getFileName())
+        shutil.copy(map, idFolder)
 
-                smi = self.getSMI(molFile)
+        structure = os.path.abspath(self.inputStructure.get().getFileName())
+        name, ext = os.path.splitext(os.path.basename(self.inputStructure.get().getFileName()))
+        print(name)
+        baseName = f"{name}_model_0"
+        newName = os.path.join(resultsFolder, baseName + ".cif")
 
-                if smi:
-                    out.write(smi + "\n")
-                    self.smiToFile[smi] = os.path.basename(molFile)
-                else:
-                    print(f"Failed to extract SMILES from {molFile}")
+        shutil.copy(structure, newName)
 
-        print(f"SMILES written to {outputFile}")
-
-    def convertFilesStep(self):
-        smilesFile = os.path.abspath(self._getPath("smiles.txt"))
-
-        pocketFiles = ",".join(
-            [os.path.abspath(roi.getFileName()) for roi in self.pockets.get()]
-        )
-
-        outputDir = os.path.abspath(self._getPath("lmdb"))
-
-        args = (f"--smiles-file {smilesFile} "
-            f"--pocket-files {pocketFiles} "
-            f"--output-dir {outputDir} "
-            f"--max-pocket-atoms {self.maxPocketAtoms.get()}"
-        )
-        scriptPath = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "scripts", "create_lmdb.py")
-        )
-
+    def runMicaStep(self):
+        seqName = os.path.abspath(self.inputSeq.get().getFileName())
+        mapFile = glob.glob(os.path.join(self.idFolder, "*.map"))[0]
+        if self.useGpu:
+            device = f'cuda:{self.gpuList.get()}'
+        else:
+            device = 'cpu'
+        phenix = self.getPhenixEnv()
+        pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/pulchra')
+        af3Folder = os.path.join(self.idFolder, "AF3_results")
+        args = [
+            f"-f {seqName}",
+            f"-a {os.path.abspath(af3Folder)}",
+            f"-m {os.path.abspath(mapFile)}",
+            f"-c {self.contourLevel.get()}",
+            f"-r {self.resolution.get()}",
+            f"-p {pulchra}",
+            f"-x {phenix}",
+            f"-d {device}"
+        ]
+        path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA')
         Plugin.runCondaCommand(
             self,
-            args=args,
-            condaDic=DRUGCLIP_DIC,
-            program=f"python {scriptPath}",
-            cwd=self._getPath()
+            program='./MICA_pipeline.sh',
+            args=" ".join(args),
+            condaDic=MICA_DIC,
+            cwd=path
         )
-
-    def runDrugclipStep(self):
-        weightPath = os.path.abspath(
-            os.path.join(Plugin.getVar(DRUGCLIP_DIC['home']), 'DrugCLIP/checkpoint_best.pt')
-        )
-        lmdbDir = os.path.abspath(self._getPath('lmdb'))
-        resultsDir = self._getPath('results')
-        os.makedirs(resultsDir, exist_ok=True)
-        pocketLmdbFiles = [
-            os.path.join(lmdbDir, f)
-            for f in os.listdir(lmdbDir)
-            if f.startswith("pocket") and f.endswith(".lmdb")
-        ]
-        scriptPath = os.path.abspath(
-            os.path.join(Plugin.getVar(DRUGCLIP_DIC["home"]), 'DrugCLIP/unimol/retrieval.py')
-        )
-        for pocketPath in pocketLmdbFiles:
-            pocketName = os.path.splitext(os.path.basename(pocketPath))[0]
-
-            args = [
-                f"--user-dir {os.path.join(Plugin.getVar(DRUGCLIP_DIC['home']), 'DrugCLIP/unimol')}",
-                "--valid-subset test",
-                f"--results-path {os.path.abspath(resultsDir)}",
-                f"--num-workers {self.numberOfThreads.get()}",
-                "--ddp-backend c10d",
-                f"--batch-size {self.batchSize.get()}",
-                "--task mica",
-                "--loss in_batch_softmax",
-                "--arch mica",
-                f"--max-pocket-atoms {self.maxPocketAtoms.get()}",
-                "--fp16",
-                "--fp16-init-scale 4",
-                "--fp16-scale-window 256",
-                "--seed 1",
-                f"--path {weightPath}",
-                "--log-interval 100",
-                "--log-format simple",
-                f"--mol-path {os.path.join(lmdbDir, 'mols.lmdb')}",
-                f"--pocket-path {os.path.abspath(pocketPath)}",
-                f"--emb-dir {os.path.abspath(resultsDir)}/{pocketName}",
-                f"{os.path.abspath(os.path.join(Plugin.getVar(DRUGCLIP_DIC['home']), 'DrugCLIP/data'))}"
-            ]
-
-            fullCommand = (
-                    f"export CUDA_VISIBLE_DEVICES={self.gpuList.get()} && "
-                    f"python {scriptPath} " + " ".join(args)
-            )
-            Plugin.runCondaCommand(
-                self,
-                args=[],
-                condaDic=DRUGCLIP_DIC,
-                program=f"bash -c '{fullCommand}'",
-                cwd=self._getPath()
-            )
 
     def createOutputStep(self):
         resultsDir = os.path.abspath(self._getPath('results'))
@@ -273,42 +230,65 @@ class ProtMICA(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
-    def getSMI(self, fnSmall):
-        fnRoot, ext = os.path.splitext(os.path.basename(fnSmall))
-        print("Extension:", ext)
+    def getMapId(self):
+        fileName = os.path.abspath(self.inputVolume.get().getFileName())
+        safeFileName = fileName.replace("'", "'\\''")
 
-        if ext != '.smi':
-            outDir = os.path.abspath(self._getExtraPath())
-            fnOut = os.path.abspath(self._getExtraPath(fnRoot + '.smi'))
+        fd, tempOut = tempfile.mkstemp()
+        os.close(fd)
 
-            args = f' -i "{fnSmall}" -of smi -o {fnOut} --outputDir {outDir}'
+        scriptContent = (
+            f"import mrcfile, re\n"
+            f"emdb_id = None\n"
+            f"with mrcfile.open(r'{safeFileName}', permissive=True) as m:\n"
+            f"    labels = getattr(m.header, 'labels', []) or []\n"
+            f"    for label in labels:\n"
+            f"        try:\n"
+            f"            s = label.decode('utf-8','ignore').strip() if isinstance(label, bytes) else str(label).strip()\n"
+            f"        except Exception:\n"
+            f"            continue\n"
+            f"        match = re.search(r'EMD-(\\d+)', s)\n"
+            f"        if match:\n"
+            f"            emdb_id = match.group(1)\n"
+            f"            break\n"
+            f"with open(r'{tempOut}', 'w') as f:\n"
+            f"    if emdb_id: f.write(emdb_id)\n"
+        )
 
-            if fnSmall.endswith(".pdbqt") or fnSmall.endswith(".mol2"):
-                envDic, scriptName = OPENBABEL_DIC, 'obabel_IO.py'
-            else:
-                envDic, scriptName = RDKIT_DIC, 'rdkit_IO.py'
+        # write temp Python script
+        fd, scriptPath = tempfile.mkstemp(suffix=".py")
+        with os.fdopen(fd, 'w') as f:
+            f.write(scriptContent)
 
-            fullProgram = (
-                f'{Plugin.getEnvActivationCommand(envDic)} '
-                f'&& python {Plugin.getScriptsDir(scriptName)} '
+        # Run inside conda
+        Plugin.runCondaCommand(
+            self,
+            args=[],
+            condaDic=MICA_DIC,
+            program=f"python {scriptPath}",
+            cwd=self._getPath()
+        )
+
+        # Read EMDB ID from temp file
+        with open(tempOut, 'r') as f:
+            emdb_id = f.read().strip()
+
+        os.remove(tempOut)
+        os.remove(scriptPath)
+
+        return emdb_id if emdb_id else 0
+
+    def getPhenixEnv(self):
+        phenixExec = shutil.which("phenix.real_space_refine")
+
+        if phenixExec is None:
+            raise Exception(
+                "\nMICA requires PHENIX.\n"
+                "Please install Phenix and ensure 'phenix.real_space_refine' "
+                "is in your PATH.\n"
             )
 
-            insistentRun(self, fullProgram, args, envDic=envDic, cwd=outDir)
+        phenixRoot = os.path.dirname(os.path.dirname(phenixExec))
+        phenixEnv = os.path.join(phenixRoot, "phenix_env.sh")
 
-            if not os.path.exists(fnOut):
-                print(f"SMILES conversion failed for {fnSmall}")
-                return None
-
-        else:
-            fnOut = fnSmall
-
-        return self.parseSMI(fnOut)
-
-    def parseSMI(self, smiFile):
-        smi = None
-        with open(smiFile) as f:
-            for line in f:
-                smi = line.split()[0].strip()
-                if smi.lower() != 'smiles':
-                    break
-        return smi
+        return phenixEnv
