@@ -25,6 +25,8 @@
 # **************************************************************************
 import os, csv, tempfile, shutil, glob
 import pyworkflow.protocol.params as params
+from Bio.PDB import PDBParser, MMCIFIO
+
 from mica import MICA_DIC
 from pwem.protocols import EMProtocol
 from pyworkflow.object import String
@@ -99,7 +101,6 @@ class ProtMICA(EMProtocol):
     def moveFilesStep(self):
         baseFolder = self._getPath('input')
         name, ext = os.path.splitext(os.path.basename(self.inputStructure.get().getFileName()))
-        print(name)
         #mapId = self.getMapId()
         mapId = 0
         idFolder = os.path.join(baseFolder, str(mapId))
@@ -115,11 +116,18 @@ class ProtMICA(EMProtocol):
 
         structure = os.path.abspath(self.inputStructure.get().getFileName())
         name, ext = os.path.splitext(os.path.basename(self.inputStructure.get().getFileName()))
-        print(name)
         baseName = f"{name}_model_0"
         newName = os.path.join(resultsFolder, baseName + ".cif")
 
-        shutil.copy(structure, newName)
+        if ext.lower() == ".pdb":
+            parser = PDBParser(QUIET=True)
+            structure = parser.get_structure(name, structure)
+
+            io = MMCIFIO()
+            io.set_structure(structure)
+            io.save(newName)
+        else:
+            shutil.copy(structure, newName)
 
     def runMicaStep(self):
         seqName = os.path.abspath(self.inputSeq.get().getFileName())
@@ -142,17 +150,17 @@ class ProtMICA(EMProtocol):
             f"-d {device}"
         ]
         path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA')
+        print(path)
         Plugin.runCondaCommand(
             self,
-            program='./MICA_pipeline.sh',
+            program=os.path.join(path, "MICA_pipeline.sh"),
             args=" ".join(args),
             condaDic=MICA_DIC,
             cwd=path
         )
 
     def createOutputStep(self):
-        resultsDir = os.path.abspath(self._getPath('results'))
-        lmdbDir = os.path.abspath(self._getPath('lmdb'))
+        resultsDir = os.path.abspath(self._getPath('output'))
 
         pocketFiles = [f for f in os.listdir(lmdbDir) if f.startswith("pocket") and f.endswith(".lmdb")]
         pockets = [os.path.splitext(f)[0] for f in pocketFiles]
