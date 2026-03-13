@@ -95,8 +95,10 @@ class ProtMICA(EMProtocol):
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         self._insertFunctionStep(self.moveFilesStep)
+        self._insertFunctionStep(self.processStructureStep)
+        self._insertFunctionStep(self.dockInMapStep)
         #self._insertFunctionStep(self.runMicaStep)
-        self._insertFunctionStep(self.createOutputStep)
+        #self._insertFunctionStep(self.createOutputStep)
 
     def moveFilesStep(self):
         baseFolder = self._getPath('input')
@@ -152,8 +154,8 @@ class ProtMICA(EMProtocol):
         path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA')
         Plugin.runCondaCommand(
             self,
-            program=os.path.join(path, "MICA_pipeline.sh"),
-            args=" ".join(args),
+            program="bash",
+            args=f'-c "PHENIX_TMP={os.path.join(self.idFolder, "phenix_tmp")} OMP_NUM_THREADS={self.numThreads.get()} {os.path.join(path, "MICA_pipeline.sh")} {" ".join(args)}"',
             condaDic=MICA_DIC,
             cwd=path
         )
@@ -169,8 +171,38 @@ class ProtMICA(EMProtocol):
         path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/utils')
         Plugin.runCondaCommand(
             self,
-            program=os.path.join(path, "process_AF3_results.py"),
-            args=" ".join(args),
+            program="python",
+            args=f"{os.path.join(path, 'process_AF3_results.py')} " + " ".join(args),
+            condaDic=MICA_DIC,
+            cwd=path
+        )
+
+    def dockInMapStep(self):
+        seqName = os.path.abspath(self.inputSeq.get().getFileName())
+        mapFile = glob.glob(os.path.join(self.idFolder, "*.map"))[0]
+        phenix = self.getPhenixEnv()
+        pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/pulchra')
+        af3Folder = os.path.join(self.idFolder, "AF3_results")
+        args = [
+            f"-m {os.path.abspath(mapFile)}",
+            f"-c {self.contourLevel.get()}",
+            f"-r {self.resolution.get()}",
+            f"-f {seqName}",
+            f"-a {os.path.abspath(af3Folder)}",
+            f"-x {phenix}"
+        ]
+        path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/utils')
+
+        phenix_tmp = os.path.join(self.idFolder, "phenix_tmp")
+        cmd = (
+                f'PHENIX_TMP="{phenix_tmp}" OMP_NUM_THREADS={self.numberOfThreads.get()} '
+                f'python {os.path.join(path, "dock_in_map.py")} ' + " ".join(args)
+        )
+
+        Plugin.runCondaCommand(
+            self,
+            program="bash",
+            args=f'-c "{cmd}"',
             condaDic=MICA_DIC,
             cwd=path
         )
