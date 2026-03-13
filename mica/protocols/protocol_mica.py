@@ -48,6 +48,7 @@ class ProtMICA(EMProtocol):
 
     """
     _label = 'protein modelling'
+    stepsExecutionMode = params.STEPS_PARALLEL
 
     # -------------------------- DEFINE param functions ----------------------
 
@@ -97,6 +98,7 @@ class ProtMICA(EMProtocol):
         self._insertFunctionStep(self.moveFilesStep)
         self._insertFunctionStep(self.processStructureStep)
         self._insertFunctionStep(self.dockInMapStep)
+        self._insertFunctionStep(self.runStep)
         #self._insertFunctionStep(self.runMicaStep)
         #self._insertFunctionStep(self.createOutputStep)
 
@@ -155,7 +157,7 @@ class ProtMICA(EMProtocol):
         Plugin.runCondaCommand(
             self,
             program="bash",
-            args=f'-c "PHENIX_TMP={os.path.join(self.idFolder, "phenix_tmp")} OMP_NUM_THREADS={self.numThreads.get()} {os.path.join(path, "MICA_pipeline.sh")} {" ".join(args)}"',
+            args=f'-c "PHENIX_TMP={os.path.join(self.idFolder, "phenix_tmp")} OMP_NUM_THREADS={self.numberOfThreads.get()} {os.path.join(path, "MICA_pipeline.sh")} {" ".join(args)}"',
             condaDic=MICA_DIC,
             cwd=path
         )
@@ -168,11 +170,11 @@ class ProtMICA(EMProtocol):
             f"-f {seqName}",
             f"-a {os.path.abspath(af3Folder)}"
         ]
-        path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/utils')
+        path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA')
         Plugin.runCondaCommand(
             self,
             program="python",
-            args=f"{os.path.join(path, 'process_AF3_results.py')} " + " ".join(args),
+            args=f"{os.path.join(path, 'utils/process_AF3_results.py')} " + " ".join(args),
             condaDic=MICA_DIC,
             cwd=path
         )
@@ -193,10 +195,57 @@ class ProtMICA(EMProtocol):
         ]
         path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/utils')
 
-        phenix_tmp = os.path.join(self.idFolder, "phenix_tmp")
+        phenixTmp = os.path.abspath(os.path.join(self.idFolder, "phenix_tmp"))
+        threads = self.numberOfThreads.get()
+
         cmd = (
-                f'PHENIX_TMP="{phenix_tmp}" OMP_NUM_THREADS={self.numberOfThreads.get()} '
+                f'mkdir -p "{phenixTmp}" && '
+                f'PHENIX_TMP="{phenixTmp}" '
+                f'OMP_NUM_THREADS={threads} '
+                f'OPENBLAS_NUM_THREADS={threads} '
+                f'MKL_NUM_THREADS={threads} '
+                f'NUMEXPR_NUM_THREADS={threads} '
+                f'taskset -c 0-{threads - 1} '
                 f'python {os.path.join(path, "dock_in_map.py")} ' + " ".join(args)
+        )
+
+        Plugin.runCondaCommand(
+            self,
+            program="bash",
+            args=f'-c "{cmd}"',
+            condaDic=MICA_DIC,
+            cwd=path
+        )
+
+    def runStep(self):
+        seqName = os.path.abspath(self.inputSeq.get().getFileName())
+        mapFile = glob.glob(os.path.join(self.idFolder, "*.map"))[0]
+        phenix = self.getPhenixEnv()
+        pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/pulchra')
+        af3Folder = os.path.join(self.idFolder, "AF3_results")
+        args = [
+            f"-m {os.path.abspath(mapFile)}",
+            f"-f {seqName}",
+            f"-a {os.path.abspath(af3Folder)}",
+            f"-p {pulchra}",
+            "--run_phenix",
+            f"-x {phenix}",
+            f"-r {self.resolution.get()}"
+        ]
+        path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA')
+
+        phenixTmp = os.path.abspath(os.path.join(self.idFolder, "phenix_tmp"))
+        threads = self.numberOfThreads.get()
+
+        cmd = (
+                f'mkdir -p "{phenixTmp}" && '
+                f'PHENIX_TMP="{phenixTmp}" '
+                f'OMP_NUM_THREADS={threads} '
+                f'OPENBLAS_NUM_THREADS={threads} '
+                f'MKL_NUM_THREADS={threads} '
+                f'NUMEXPR_NUM_THREADS={threads} '
+                f'taskset -c 0-{threads - 1} '
+                f'python {os.path.join(path, "run.py")} ' + " ".join(args)
         )
 
         Plugin.runCondaCommand(
