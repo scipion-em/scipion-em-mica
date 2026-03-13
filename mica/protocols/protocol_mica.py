@@ -100,7 +100,7 @@ class ProtMICA(EMProtocol):
         self._insertFunctionStep(self.dockInMapStep)
         self._insertFunctionStep(self.runStep)
         #self._insertFunctionStep(self.runMicaStep)
-        #self._insertFunctionStep(self.createOutputStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     def moveFilesStep(self):
         baseFolder = self._getPath('input')
@@ -200,7 +200,7 @@ class ProtMICA(EMProtocol):
 
         cmd = (
                 f'mkdir -p "{phenixTmp}" && '
-                f'PHENIX_TMP="{phenixTmp}" '
+                f'export PHENIX_TMP="{phenixTmp}" && '
                 f'OMP_NUM_THREADS={threads} '
                 f'OPENBLAS_NUM_THREADS={threads} '
                 f'MKL_NUM_THREADS={threads} '
