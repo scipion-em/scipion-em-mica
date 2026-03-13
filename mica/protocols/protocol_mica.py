@@ -96,7 +96,7 @@ class ProtMICA(EMProtocol):
     def _insertAllSteps(self):
         self._insertFunctionStep(self.moveFilesStep)
         self._insertFunctionStep(self.runMicaStep)
-        #self._insertFunctionStep(self.createOutputStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     def moveFilesStep(self):
         baseFolder = self._getPath('input')
@@ -150,7 +150,6 @@ class ProtMICA(EMProtocol):
             f"-d {device}"
         ]
         path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA')
-        print(path)
         Plugin.runCondaCommand(
             self,
             program=os.path.join(path, "MICA_pipeline.sh"),
@@ -162,67 +161,20 @@ class ProtMICA(EMProtocol):
     def createOutputStep(self):
         resultsDir = os.path.abspath(self._getPath('output'))
 
-        pocketFiles = [f for f in os.listdir(lmdbDir) if f.startswith("pocket") and f.endswith(".lmdb")]
-        pockets = [os.path.splitext(f)[0] for f in pocketFiles]
+        pdbFiles = glob.glob(os.path.join(resultsDir, "*.pdb"))
+        if not pdbFiles:
+            raise FileNotFoundError(f"No PDB file found in {resultsDir}")
+        finalPdb = pdb_files[0]
 
-        allMolecules = set()
-        pocketScoresDict = {}
+        struct = AtomStruct(filename=finalPdb)
 
-        for pocket in pockets:
-            pocketDir = os.path.join(resultsDir, pocket)
-            scoreFile = None
-            for f in os.listdir(pocketDir):
-                if f.endswith(".txt"):
-                    scoreFile = os.path.join(pocketDir, f)
-                    break
-            if not scoreFile:
-                continue
-
-            pocketScores = {}
-            with open(scoreFile) as sf:
-                for line in sf:
-                    parts = line.strip().split("\t")
-                    if len(parts) != 2:
-                        continue
-                    smi, score = parts
-                    try:
-                        pocketScores[smi] = float(score)
-                        allMolecules.add(smi)
-                    except ValueError:
-                        print(f"Invalid score for molecule {smi} in pocket {pocket}")
-
-            pocketScoresDict[pocket] = pocketScores
-
-        allMolecules = sorted(allMolecules)
-        allMoleculeFiles = [self.smiToFile.get(smi, smi) for smi in allMolecules]
-
-        outputFile = os.path.join(self._getPath(), "results.csv")
-        with open(outputFile, "w", newline="") as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(["Pocket"] + allMoleculeFiles)
-            for pocket in pockets:
-                row = [pocket]
-                scores = pocketScoresDict.get(pocket, {})
-                row += [scores.get(smi, 0.0) for smi in allMolecules]
-                writer.writerow(row)
-
-        outSet = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
-        for pocket in self.pockets.get():
-            outPock = StructROI()
-            outPock.copy(pocket)
-            outPock.Drugclip_file = String()
-            outPock.setAttributeValue('Drugclip_file', str(outputFile))
-            outSet.append(outPock)
-
-        outSet.Drugclip_file = String()
-        outSet.setAttributeValue('Drugclip_file', str(outputFile))
-
-        outSet.buildPDBhetatmFile()
-        self._defineOutputs(outputStructROIs=outSet)
+        self._defineOutputs(
+            outputAtomStruct=struct
+        )
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
-        summary = ["Results csv written in protocols path: results.csv"]
+        summary = []
         return summary
 
     def _methods(self):
