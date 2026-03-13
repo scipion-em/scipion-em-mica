@@ -95,7 +95,7 @@ class ProtMICA(EMProtocol):
     # --------------------------- STEPS functions ------------------------------
     def _insertAllSteps(self):
         self._insertFunctionStep(self.moveFilesStep)
-        self._insertFunctionStep(self.runMicaStep)
+        #self._insertFunctionStep(self.runMicaStep)
         self._insertFunctionStep(self.createOutputStep)
 
     def moveFilesStep(self):
@@ -153,6 +153,23 @@ class ProtMICA(EMProtocol):
         Plugin.runCondaCommand(
             self,
             program=os.path.join(path, "MICA_pipeline.sh"),
+            args=" ".join(args),
+            condaDic=MICA_DIC,
+            cwd=path
+        )
+
+    def processStructureStep(self):
+        seqName = os.path.abspath(self.inputSeq.get().getFileName())
+
+        af3Folder = os.path.join(self.idFolder, "AF3_results")
+        args = [
+            f"-f {seqName}",
+            f"-a {os.path.abspath(af3Folder)}"
+        ]
+        path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/utils')
+        Plugin.runCondaCommand(
+            self,
+            program=os.path.join(path, "process_AF3_results.py"),
             args=" ".join(args),
             condaDic=MICA_DIC,
             cwd=path
