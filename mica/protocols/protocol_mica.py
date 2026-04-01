@@ -32,6 +32,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.object import String
 
 from pwem.convert.atom_struct import pdbToCif
+from pwem.objects import AtomStruct
 
 
 from pwchem import Plugin
@@ -111,7 +112,18 @@ class ProtMICA(EMProtocol):
         os.makedirs(idFolder, exist_ok=True)
         self.idFolder = idFolder
 
-        resultsFolder = os.path.join(idFolder, f"AF3_results/{name}_1")
+        #resultsFolder = os.path.join(idFolder, f"AF3_results/{name}_1")
+        from Bio import SeqIO
+        seqSrc = os.path.abspath(self.inputSeq.get().getFileName())
+        record = next(SeqIO.parse(seqSrc, "fasta"))
+        seqId = record.id.split("|")[0].strip()
+        seqId = seqId.split("_")[0]
+
+        seqDst = os.path.join(idFolder, f"{seqId}.fasta")
+        shutil.copy(seqSrc, seqDst)
+        self.seqDst = seqDst
+
+        resultsFolder = os.path.join(idFolder, f"AF3_results/{seqId}_1")
         os.makedirs(resultsFolder, exist_ok=True)
         self.resultsFolder = resultsFolder
 
@@ -120,6 +132,7 @@ class ProtMICA(EMProtocol):
 
         structure = os.path.abspath(self.inputStructure.get().getFileName())
         name, ext = os.path.splitext(os.path.basename(self.inputStructure.get().getFileName()))
+        #baseName = f"{name}_model_0"
         baseName = f"{name}_model_0"
         newName = os.path.join(resultsFolder, baseName + ".cif")
 
@@ -163,7 +176,7 @@ class ProtMICA(EMProtocol):
         )
 
     def processStructureStep(self):
-        seqName = os.path.abspath(self.inputSeq.get().getFileName())
+        seqName = os.path.abspath(self.seqDst)
 
         af3Folder = os.path.join(self.idFolder, "AF3_results")
         args = [
@@ -178,6 +191,19 @@ class ProtMICA(EMProtocol):
             condaDic=MICA_DIC,
             cwd=path
         )
+
+        newName = '_1'
+        structureFolder = os.path.join(self.idFolder, "AF3_structures")
+        for name in os.listdir(structureFolder):
+            old_path = os.path.join(structureFolder, name)
+
+            if os.path.isdir(old_path) and name.endswith("_0.cif"):
+                base = name[:-6]
+                new_name = base + "_1"
+                new_path = os.path.join(structureFolder, new_name)
+
+                os.rename(old_path, new_path)
+
 
     def dockInMapStep(self):
         seqName = os.path.abspath(self.inputSeq.get().getFileName())
@@ -262,7 +288,7 @@ class ProtMICA(EMProtocol):
         pdbFiles = glob.glob(os.path.join(resultsDir, "*.pdb"))
         if not pdbFiles:
             raise FileNotFoundError(f"No PDB file found in {resultsDir}")
-        finalPdb = pdb_files[0]
+        finalPdb = pdbFiles[0]
 
         struct = AtomStruct(filename=finalPdb)
 
