@@ -154,7 +154,7 @@ class ProtMICA(EMProtocol):
         else:
             device = 'cpu'
         phenix = self.getPhenixEnv()
-        pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/pulchra')
+        pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/bin/linux/pulchra')
         af3Folder = os.path.join(self.idFolder, "AF3_results")
         args = [
             f"-f {seqName}",
@@ -209,7 +209,7 @@ class ProtMICA(EMProtocol):
         seqName = os.path.abspath(self.inputSeq.get().getFileName())
         mapFile = glob.glob(os.path.join(self.idFolder, "*.map"))[0]
         phenix = self.getPhenixEnv()
-        pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/pulchra')
+        pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/bin/linux/pulchra')
         af3Folder = os.path.join(self.idFolder, "AF3_results")
         args = [
             f"-m {os.path.abspath(mapFile)}",
@@ -247,7 +247,7 @@ class ProtMICA(EMProtocol):
         seqName = os.path.abspath(self.inputSeq.get().getFileName())
         mapFile = glob.glob(os.path.join(self.idFolder, "*.map"))[0]
         phenix = self.getPhenixEnv()
-        pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/pulchra')
+        pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/bin/linux/pulchra')
         af3Folder = os.path.join(self.idFolder, "AF3_results")
         args = [
             f"-m {os.path.abspath(mapFile)}",
