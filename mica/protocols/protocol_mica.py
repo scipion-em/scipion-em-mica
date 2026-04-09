@@ -50,6 +50,7 @@ class ProtMICA(EMProtocol):
     """
     _label = 'protein modelling'
     stepsExecutionMode = params.STEPS_PARALLEL
+    pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/bin/linux/pulchra')
 
     # -------------------------- DEFINE param functions ----------------------
 
@@ -147,6 +148,7 @@ class ProtMICA(EMProtocol):
             shutil.copy(structure, newName)
 
     def runMicaStep(self):
+        self.ensurePulchraExecutable()
         seqName = os.path.abspath(self.inputSeq.get().getFileName())
         mapFile = glob.glob(os.path.join(self.idFolder, "*.map"))[0]
         if self.useGpu:
@@ -154,7 +156,6 @@ class ProtMICA(EMProtocol):
         else:
             device = 'cpu'
         phenix = self.getPhenixEnv()
-        pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/bin/linux/pulchra')
         af3Folder = os.path.join(self.idFolder, "AF3_results")
         args = [
             f"-f {seqName}",
@@ -162,7 +163,7 @@ class ProtMICA(EMProtocol):
             f"-m {os.path.abspath(mapFile)}",
             f"-c {self.contourLevel.get()}",
             f"-r {self.resolution.get()}",
-            f"-p {pulchra}",
+            f"-p {self.pulchra}",
             f"-x {phenix}",
             f"-d {device}"
         ]
@@ -206,10 +207,10 @@ class ProtMICA(EMProtocol):
 
 
     def dockInMapStep(self):
+        self.ensurePulchraExecutable()
         seqName = os.path.abspath(self.inputSeq.get().getFileName())
         mapFile = glob.glob(os.path.join(self.idFolder, "*.map"))[0]
         phenix = self.getPhenixEnv()
-        pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/bin/linux/pulchra')
         af3Folder = os.path.join(self.idFolder, "AF3_results")
         args = [
             f"-m {os.path.abspath(mapFile)}",
@@ -244,19 +245,25 @@ class ProtMICA(EMProtocol):
         )
 
     def runStep(self):
+        self.ensurePulchraExecutable()
         seqName = os.path.abspath(self.inputSeq.get().getFileName())
         mapFile = glob.glob(os.path.join(self.idFolder, "*.map"))[0]
         phenix = self.getPhenixEnv()
-        pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/bin/linux/pulchra')
+        if self.useGpu:
+            device = f'cuda:{self.gpuList.get()}'
+        else:
+            device = 'cpu'
+
         af3Folder = os.path.join(self.idFolder, "AF3_results")
         args = [
             f"-m {os.path.abspath(mapFile)}",
             f"-f {seqName}",
             f"-a {os.path.abspath(af3Folder)}",
-            f"-p {pulchra}",
+            f"-p {self.pulchra}",
             "--run_phenix",
             f"-x {phenix}",
-            f"-r {self.resolution.get()}"
+            f"-r {self.resolution.get()}",
+            f"--device {device}"
         ]
         path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA')
 
@@ -376,3 +383,8 @@ class ProtMICA(EMProtocol):
         phenixEnv = os.path.join(phenixRoot, "phenix_env.sh")
 
         return phenixEnv
+
+    def ensurePulchraExecutable(self):
+        import os
+        if os.path.exists(self.pulchra):
+            os.chmod(self.pulchra, 0o755)
