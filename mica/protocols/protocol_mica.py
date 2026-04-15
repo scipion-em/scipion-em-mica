@@ -289,6 +289,10 @@ class ProtMICA(EMProtocol):
             cwd=path
         )
 
+        outputFolder = os.path.join(path, 'output')
+        if os.path.exists(outputFolder):
+            shutil.move(outputFolder, self._getPath())
+
     def createOutputStep(self):
         resultsDir = os.path.abspath(self._getPath('output'))
 
