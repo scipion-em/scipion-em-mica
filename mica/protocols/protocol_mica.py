@@ -35,7 +35,7 @@ from pwem.convert.atom_struct import pdbToCif
 from pwem.objects import AtomStruct
 
 
-from pwchem import Plugin
+from mica import Plugin
 from pwchem.objects import  SetOfStructROIs, StructROI
 from pwchem.utils import insistentRun
 from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC

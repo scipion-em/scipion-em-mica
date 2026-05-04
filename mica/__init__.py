@@ -29,12 +29,13 @@ import shutil
 from scipion.install.funcs import InstallHelper
 
 from pwchem import Plugin as pwchemPlugin
+from pwem import Plugin as pwemPlugin
 from .constants import *
 
 _references = ['']
 
 
-class Plugin(pwchemPlugin):
+class Plugin(pwemPlugin):
     @classmethod
     def defineBinaries(cls, env):
         cls.addMicaPackage(env)
@@ -85,3 +86,31 @@ class Plugin(pwchemPlugin):
                 "Please install Phenix and ensure 'phenix.real_space_refine' "
                 "is in your PATH.\n"
             )
+
+    @classmethod
+    def getEnvName(cls, packageDictionary):
+        """ This function returns the name of the conda enviroment for a given package. """
+        return '{}-{}'.format(packageDictionary['name'], packageDictionary['version'])
+
+    @classmethod
+    def getEnvActivationCommand(cls, packageDictionary, condaHook=True):
+        """ This function returns the conda enviroment activation command for a given package. """
+        return '{}conda activate {}'.format(cls.getCondaActivationCmd() if condaHook else '',
+                                            cls.getEnvName(packageDictionary))
+
+    @classmethod
+    def runCondaCommand(cls, protocol, args, condaDic, program, cwd=None, popen=False, silent=True, retOut=False):
+        """ General function to run conda commands """
+        result = None
+        fullProgram = f'{cls.getEnvActivationCommand(condaDic)} && {program} '
+        if not popen and not retOut:
+            protocol.runJob(fullProgram, args, env=cls.getEnviron(), cwd=cwd, numberOfThreads=1)
+        else:
+            if not retOut:
+                kwargs = {}
+                if silent:
+                    kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+                run(fullProgram + args, env=cls.getEnviron(), cwd=cwd, shell=True, **kwargs)
+            else:
+                result = subprocess.check_output(fullProgram + args, cwd=cwd, shell=True, text=True)
+        return result
