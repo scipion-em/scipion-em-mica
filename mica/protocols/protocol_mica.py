@@ -46,7 +46,179 @@ RDKIT, OPENBABEL = 0, 1
 
 class ProtMICA(EMProtocol):
     """
+    Performs protein model fitting and refinement into a cryo-EM density map
+    using the MICA workflow.
 
+    AI Generated:
+
+    Protein Modelling (ProtMICA) — User Manual
+        Overview
+
+        The Protein Modelling protocol runs the MICA pipeline to fit and
+        refine a protein atomic model inside an electron density map.
+
+        Its main purpose is to combine a cryo-EM map, an amino acid
+        sequence, and an initial predicted atomic structure into a
+        refined structural model consistent with the experimental
+        density.
+
+        In structural biology workflows, this protocol is especially
+        useful when an initial AlphaFold or AlphaFold3 prediction exists
+        but requires adaptation to the experimental cryo-EM map.
+
+        From a biological perspective, this step bridges computational
+        structure prediction and experimentally observed density,
+        enabling more reliable structural interpretation.
+
+        Inputs and General Workflow
+
+        The protocol requires four main inputs:
+
+            - An input electron density map.
+            - The experimental map resolution.
+            - The contour level used for map interpretation.
+            - An input amino acid sequence.
+            - An initial predicted atomic structure.
+
+        During execution, the protocol runs several consecutive stages:
+
+            1. Input preparation and file organization.
+            2. Processing of the predicted AF3 structure.
+            3. Initial docking of the structure into the map.
+            4. Full MICA refinement and model rebuilding.
+            5. Import of the final refined atomic model.
+
+        This workflow converts an initial predicted model into a
+        density-guided refined structure.
+
+        Input Preparation
+
+        In the first stage, the protocol organizes all required input
+        files into the internal MICA directory structure.
+
+        The sequence is copied and renamed using the sequence
+        identifier.
+
+        The input map is copied into the working directory.
+
+        The input atomic model is also prepared. If the input structure
+        is provided in PDB format, it is automatically converted into
+        mmCIF format.
+
+        This normalization step is important because MICA expects a
+        standardized input folder organization before execution.
+
+        Processing of AF3 Results
+
+        The protocol then processes the initial predicted structure
+        using MICA utilities.
+
+        This stage prepares the AlphaFold-derived model and generates
+        the internal folder structure expected by the downstream
+        refinement modules.
+
+        In practice, this step adapts prediction output into a format
+        suitable for map-guided structural refinement.
+
+        Initial Docking into the Map
+
+        Before full refinement, the protocol performs an initial docking
+        of the predicted model into the density map.
+
+        This docking step uses:
+
+            - The input map
+            - The contour threshold
+            - The experimental resolution
+            - The sequence
+            - The processed predicted structure
+
+        Biologically, this stage places the predicted model into the
+        correct approximate position inside the experimental density.
+
+        This initial placement is important because downstream
+        refinement performs best when the starting model is already
+        reasonably close to the true density-supported conformation.
+
+        Full MICA Refinement
+
+        After docking, the protocol launches the main MICA refinement
+        pipeline.
+
+        This stage combines several operations:
+
+            - Structure rebuilding
+            - Local fitting into density
+            - PHENIX real-space refinement
+            - Geometric rebuilding using Pulchra
+
+        The protocol can run either on CPU or GPU.
+
+        When GPU execution is enabled, the selected CUDA device is used.
+        Otherwise, computation runs entirely on CPU.
+
+        From a structural biology perspective, this stage attempts to
+        improve both geometric plausibility and density agreement.
+
+        Computational Environment
+
+        The protocol automatically configures the computational
+        environment required by MICA.
+
+        It manages:
+
+            - Thread allocation
+            - Temporary PHENIX workspace
+            - Pulchra executable permissions
+            - Conda environment execution
+
+        It also verifies that PHENIX is available in the system PATH.
+
+        If PHENIX is not installed, execution cannot proceed.
+
+        Outputs and Their Interpretation
+
+        The final output of the protocol is a refined atomic structure.
+
+        After MICA finishes, the protocol searches the output directory
+        for a generated PDB file and imports it as an AtomStruct object.
+
+        Biologically, this output represents a refined protein model
+        that incorporates both:
+
+            - Prior structural prediction information
+            - Experimental cryo-EM density constraints
+
+        This refined model can be used for visualization, structural
+        interpretation, comparative analysis, or further refinement.
+
+        Practical Recommendations
+
+        In routine cryo-EM modelling workflows, the protocol performs
+        best when the initial predicted structure already resembles the
+        target conformation.
+
+        Accurate map resolution and appropriate contour level are
+        particularly important because they strongly influence docking
+        and refinement behavior.
+
+        If the input model differs strongly from the experimental
+        conformation, initial docking may become unstable and final
+        refinement may converge to suboptimal solutions.
+
+        GPU execution is generally preferable when available, especially
+        for larger proteins or more demanding refinement cases.
+
+        Final Perspective
+
+        For cryo-EM users, this protocol provides an automated bridge
+        between predicted protein structures and experimental density
+        maps.
+
+        Although computationally sophisticated, its biological value is
+        straightforward: it improves the structural consistency between
+        theoretical prediction and experimental observation, enabling
+        more reliable downstream interpretation.
     """
     _label = 'protein modelling'
     stepsExecutionMode = params.STEPS_PARALLEL
