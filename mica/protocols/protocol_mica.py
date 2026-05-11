@@ -46,7 +46,139 @@ RDKIT, OPENBABEL = 0, 1
 
 class ProtMICA(EMProtocol):
     """
+    Performs protein structure modeling guided by cryo-EM density and prior structural prediction.
+    The protocol integrates an experimental electron-density map, a protein sequence, and an
+    initial atomic model in order to generate a refined structural interpretation that is more
+    consistent with the observed density while preserving biologically meaningful stereochemistry.
 
+    AI Generated:
+
+    Protein Modelling (ProtMICA) — User Manual
+        Overview
+
+        The Protein Modelling protocol is intended for situations in which a biological user has
+        an experimental cryo-EM map together with a candidate structural model and wishes to obtain
+        an improved atomic interpretation of the density. In modern cryo-EM workflows this is a
+        particularly common situation when a predicted model, such as one derived from AlphaFold-like
+        methods, captures the global fold correctly but still requires adaptation to the experimental
+        map.
+
+        The main objective of the protocol is to bridge the gap between prediction and experiment.
+        Rather than treating the starting model as final, the protocol uses the density as a
+        structural constraint and attempts to produce a model that better reflects the observed
+        molecular state. This is especially useful when studying conformational rearrangements,
+        domain motions, ligand-induced structural changes, or regions where prediction confidence is
+        limited.
+
+        Inputs and Biological Context
+
+        The protocol requires three biologically complementary inputs. The first is the cryo-EM
+        density map, which provides the experimental structural information. The second is the
+        primary amino-acid sequence, which defines the molecular identity of the target. The third
+        is an initial atomic model, which serves as the structural starting point for refinement.
+
+        In practice, the most useful applications arise when the starting model is already broadly
+        compatible with the target but does not yet fully match the density. This commonly occurs in
+        medium-resolution cryo-EM studies, in comparative modeling projects, or in workflows where
+        predicted structures must be reconciled with experimentally observed states.
+
+        The protocol also makes use of map resolution and contour information. From a biological
+        perspective, these parameters define how confidently density features can guide structural
+        interpretation. Reasonable values are particularly important when maps contain heterogeneous
+        regions, flexible loops, or variable local resolution.
+
+        Preparation of Structural Information
+
+        Before model refinement can be biologically meaningful, all input information must be placed
+        into a coherent structural context. The protocol therefore organizes the sequence, density,
+        and initial model into a common working framework.
+
+        This preparation stage is particularly important when predicted models originate from
+        external resources or when structures come from previous computational analyses rather than
+        from direct experimental fitting. Ensuring consistency at this stage improves the reliability
+        of downstream interpretation and reduces the risk of propagating incompatible structural
+        assumptions.
+
+        Density-Guided Docking
+
+        A central biological step in the workflow is the placement of the candidate model into the
+        cryo-EM map. Even when a predicted structure is globally accurate, its orientation and
+        position relative to the density may not correspond to the experimentally observed state.
+
+        Docking addresses this by establishing the approximate spatial relationship between model and
+        map before more detailed refinement begins. This is particularly important for large
+        assemblies, multidomain proteins, and complexes where the predicted structure captures local
+        folds well but not the exact global arrangement observed experimentally.
+
+        From a biological perspective, successful docking helps ensure that later refinement is
+        driven by meaningful density correspondence rather than by arbitrary initial placement.
+
+        Refinement and Model Adaptation
+
+        Once the approximate placement is established, the protocol performs density-guided
+        structural refinement. The purpose of this stage is not simply geometric adjustment but
+        biologically informed model adaptation.
+
+        In favorable cases, refinement improves side-chain placement, loop accommodation, domain
+        positioning, and local stereochemical consistency while maintaining compatibility with the
+        experimental density. This becomes especially valuable when the density reveals conformations
+        that differ from those predicted computationally.
+
+        For cryo-EM users, this means the resulting model is often more suitable for biological
+        interpretation than the initial prediction alone. Regions involved in binding, catalytic
+        function, inter-subunit contacts, or conformational switching may become more interpretable
+        after refinement.
+
+        Computational Flexibility
+
+        The protocol supports execution in computational environments ranging from standard CPU-based
+        systems to GPU-accelerated platforms. For practical cryo-EM work this allows adaptation to
+        both exploratory desktop analyses and larger facility-scale processing environments.
+
+        GPU acceleration is particularly valuable when dealing with large proteins, complex maps, or
+        iterative modeling workflows. However, the biological interpretation of the result should
+        always remain the same: computational speed may change, but structural reliability still
+        depends primarily on the quality of the experimental map and the plausibility of the initial
+        model.
+
+        Output and Interpretation
+
+        The final result is a refined atomic structure that represents a density-consistent model of
+        the macromolecule. Biologically, this output is best understood as an experimentally guided
+        structural hypothesis rather than as an automatically perfect reconstruction.
+
+        In many applications, the refined model can be used for downstream interpretation, including
+        inspection of conformational states, residue-level structural analysis, preparation of
+        figures, interaction analysis, or subsequent refinement in other structural biology tools.
+
+        As with any cryo-EM modeling workflow, users should visually inspect the final fit,
+        especially in flexible regions, low-resolution areas, and interfaces where biological
+        conclusions may be particularly sensitive to modeling assumptions.
+
+        Practical Recommendations
+
+        For most biological applications, the protocol performs best when the starting model already
+        captures the correct global fold and when the density map has sufficient quality to guide
+        meaningful structural adjustment. Strongly incorrect starting models or highly fragmented
+        density may limit the interpretability of the result.
+
+        When the map contains multiple conformational states, biological caution is particularly
+        important. The refinement process may favor dominant density features, potentially obscuring
+        minor but biologically relevant states.
+
+        It is generally advisable to inspect not only the final global fit but also local regions of
+        functional importance such as ligand-binding pockets, flexible loops, catalytic residues, or
+        interfaces involved in oligomerization.
+
+        Final Perspective
+
+        For cryo-EM practitioners, protein modeling is not merely a computational finishing step but
+        a central stage of structural interpretation. The biological value of the final model depends
+        on how well it reconciles prior structural knowledge with experimental evidence.
+
+        By combining sequence information, predicted structural priors, and cryo-EM density into a
+        unified modeling workflow, this protocol provides a practical route toward experimentally
+        informed atomic models that are better suited for downstream biological analysis.
     """
     _label = 'protein modelling'
     stepsExecutionMode = params.STEPS_PARALLEL
