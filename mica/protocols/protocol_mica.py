@@ -34,7 +34,6 @@ from pyworkflow.object import String
 from pwem.convert.atom_struct import pdbToCif
 from pwem.objects import AtomStruct
 
-
 from mica import Plugin
 from pwchem.objects import  SetOfStructROIs, StructROI
 from pwchem.utils import insistentRun
@@ -150,7 +149,13 @@ class ProtMICA(EMProtocol):
     def runMicaStep(self):
         self.ensurePulchraExecutable()
         seqName = os.path.abspath(self.inputSeq.get().getFileName())
-        mapFile = glob.glob(os.path.join(self.idFolder, "*.map"))[0]
+        mapFiles = (
+                glob.glob(os.path.join(self.idFolder, "*.map")) +
+                glob.glob(os.path.join(self.idFolder, "*.mrc")) +
+                glob.glob(os.path.join(self.idFolder, "*.mrc.gz"))
+        )
+
+        mapFile = mapFiles[0]
         if self.useGpu:
             device = f'cuda:{self.gpuList.get()}'
         else:
@@ -209,7 +214,13 @@ class ProtMICA(EMProtocol):
     def dockInMapStep(self):
         self.ensurePulchraExecutable()
         seqName = os.path.abspath(self.inputSeq.get().getFileName())
-        mapFile = glob.glob(os.path.join(self.idFolder, "*.map"))[0]
+        mapFiles = (
+                glob.glob(os.path.join(self.idFolder, "*.map")) +
+                glob.glob(os.path.join(self.idFolder, "*.mrc")) +
+                glob.glob(os.path.join(self.idFolder, "*.mrc.gz"))
+        )
+
+        mapFile = mapFiles[0]
         phenix = self.getPhenixEnv()
         af3Folder = os.path.join(self.idFolder, "AF3_results")
         args = [
@@ -247,7 +258,13 @@ class ProtMICA(EMProtocol):
     def runStep(self):
         self.ensurePulchraExecutable()
         seqName = os.path.abspath(self.inputSeq.get().getFileName())
-        mapFile = glob.glob(os.path.join(self.idFolder, "*.map"))[0]
+        mapFiles = (
+                glob.glob(os.path.join(self.idFolder, "*.map")) +
+                glob.glob(os.path.join(self.idFolder, "*.mrc")) +
+                glob.glob(os.path.join(self.idFolder, "*.mrc.gz"))
+        )
+
+        mapFile = mapFiles[0]
         phenix = self.getPhenixEnv()
         if self.useGpu:
             device = f'cuda:{self.gpuList.get()}'
@@ -374,18 +391,27 @@ class ProtMICA(EMProtocol):
         return emdb_id if emdb_id else 0
 
     def getPhenixEnv(self):
-        phenixExec = shutil.which("phenix.real_space_refine")
+        phenixHome = Plugin.getVar('PHENIX_HOME', None)
 
-        if phenixExec is None:
+        if not phenixHome:
+            phenixHome = os.environ.get('PHENIX_HOME', None)
+
+        if not phenixHome or not os.path.exists(phenixHome):
             raise Exception(
                 "\nMICA requires PHENIX.\n"
-                "Please install Phenix and ensure 'phenix.real_space_refine' "
-                "is in your PATH.\n"
+                "Install phenix and define de PHENIX_HOME variable in scipion.conf.\n"
             )
+        phenixEnv = os.path.join(phenixHome, "phenix_env.sh")
 
-        phenixRoot = os.path.dirname(os.path.dirname(phenixExec))
-        phenixEnv = os.path.join(phenixRoot, "phenix_env.sh")
-
+        if not os.path.exists(phenixEnv):
+            alternativePath = os.path.join(phenixHome, "build", "phenix_env.sh")
+            if os.path.exists(alternativePath):
+                phenixEnv = alternativePath
+            else:
+                raise FileNotFoundError(
+                    f"\nSe encontró PHENIX_HOME en '{phenixHome}', pero no se localiza "
+                    f"el archivo 'phenix_env.sh' necesario para inicializarlo.\n"
+                )
         return phenixEnv
 
     def ensurePulchraExecutable(self):

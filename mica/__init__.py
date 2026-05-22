@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import shutil
+import os
 
 from scipion.install.funcs import InstallHelper
 
@@ -48,18 +48,20 @@ class Plugin(pwemPlugin):
 
     @classmethod
     def addMicaPackage(cls, env, default=True):
-        cls.checkPhenix()
+        _ = cls.checkPhenix()
         installer = InstallHelper(
             MICA_DIC['name'],
             packageHome=cls.getVar(MICA_DIC['home']),
             packageVersion=MICA_DIC['version']
         )
 
+        conda_activation = cls.getCondaActivationCmd()
+
         installer.addCommand(
             "git clone https://github.com/jianlin-cheng/MICA.git",
             f"mica_cloned"
         ).addCommand(
-            f"cd MICA && conda env create -f environment.yml -n {MICA_DIC['name']}-{MICA_DIC['version']}",
+            f"{conda_activation} cd MICA && conda env create -f environment.yml -n {MICA_DIC['name']}-{MICA_DIC['version']}",
             "mica_env_created"
         ).addCommand(
             "cd MICA && "
@@ -71,20 +73,19 @@ class Plugin(pwemPlugin):
         installer.addPackage(
             env,
             dependencies=['git', 'wget', 'curl', 'make', 'g++'],
-            default=default
-        )
+            default=default)
 
     @classmethod
     def checkPhenix(cls):
-        phenix = shutil.which("phenix.real_space_refine")
+        phenixHome = Plugin.getVar('PHENIX_HOME', None)
 
-        if phenix is not None:
-            print("phenix already installed!")
-        elif phenix is None:
+        if not phenixHome:
+            phenixHome = os.environ.get('PHENIX_HOME', None)
+
+        if not phenixHome or not os.path.exists(phenixHome):
             raise Exception(
                 "\nMICA requires PHENIX.\n"
-                "Please install Phenix and ensure 'phenix.real_space_refine' "
-                "is in your PATH.\n"
+                "Install phenix and define de PHENIX_HOME variable in scipion.conf.\n"
             )
 
     @classmethod
