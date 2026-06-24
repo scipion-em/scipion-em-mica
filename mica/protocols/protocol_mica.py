@@ -25,7 +25,8 @@
 # **************************************************************************
 import os, csv, tempfile, shutil, glob
 import pyworkflow.protocol.params as params
-from Bio.PDB import PDBParser, MMCIFIO
+from Bio.PDB import PDBParser, MMCIFIO, MMCIFParser, Select
+from Bio import SeqIO
 
 from mica import MICA_DIC
 from pwem.protocols import EMProtocol
@@ -38,10 +39,16 @@ from mica import Plugin
 from pwchem.objects import  SetOfStructROIs, StructROI
 from pwchem.utils import insistentRun
 from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
+from pwem.convert import cifToPdb
 
 RDKIT, OPENBABEL = 0, 1
 
+class ChainSelect(Select):
+    def __init__(self, chain_id):
+        self.chain_id = chain_id
 
+    def accept_chain(self, chain):
+        return chain.id == self.chain_id
 
 class ProtMICA(EMProtocol):
     """
@@ -100,90 +107,47 @@ class ProtMICA(EMProtocol):
         self._insertFunctionStep(self.processStructureStep)
         self._insertFunctionStep(self.dockInMapStep)
         self._insertFunctionStep(self.runStep)
-        #self._insertFunctionStep(self.runMicaStep)
         self._insertFunctionStep(self.createOutputStep)
 
     def moveFilesStep(self):
         baseFolder = self._getPath('input')
-        name, ext = os.path.splitext(os.path.basename(self.inputStructure.get().getFileName()))
-        #mapId = self.getMapId()
-        mapId = 0
-        idFolder = os.path.join(baseFolder, str(mapId))
+        idFolder = os.path.join(baseFolder, "0")
         os.makedirs(idFolder, exist_ok=True)
-        self.idFolder = idFolder
 
-        #resultsFolder = os.path.join(idFolder, f"AF3_results/{name}_1")
-        from Bio import SeqIO
         seqSrc = os.path.abspath(self.inputSeq.get().getFileName())
-        record = next(SeqIO.parse(seqSrc, "fasta"))
-        seqId = record.id.split("|")[0].strip()
-        seqId = seqId.split("_")[0]
+        structurePath = os.path.abspath(self.inputStructure.get().getFileName())
+        volumePath = os.path.abspath(self.inputVolume.get().getFileName())
 
-        seqDst = os.path.join(idFolder, f"{seqId}.fasta")
-        shutil.copy(seqSrc, seqDst)
-        self.seqDst = seqDst
+        af3Base = os.path.join(idFolder, "AF3_results")
+        os.makedirs(af3Base, exist_ok=True)
 
-        resultsFolder = os.path.join(idFolder, f"AF3_results/{seqId}_1")
-        os.makedirs(resultsFolder, exist_ok=True)
-        self.resultsFolder = resultsFolder
+        parser = MMCIFParser(QUIET=True)
+        structure = parser.get_structure("struct", structurePath)
 
-        map = os.path.abspath(self.inputVolume.get().getFileName())
-        shutil.copy(map, idFolder)
+        model = next(structure.get_models(), None)
 
-        structure = os.path.abspath(self.inputStructure.get().getFileName())
-        name, ext = os.path.splitext(os.path.basename(self.inputStructure.get().getFileName()))
-        #baseName = f"{name}_model_0"
-        baseName = f"{name}_model_0"
-        newName = os.path.join(resultsFolder, baseName + ".cif")
+        chains = list(model.get_chains())
+        records = list(SeqIO.parse(seqSrc, "fasta"))
+        
+        shutil.copyfile(seqSrc, os.path.join(idFolder, os.path.basename(seqSrc)))
+        self.seqDst = seqSrc
+        self.idFolder = idFolder
+        shutil.copyfile(volumePath, os.path.join(idFolder, os.path.basename(volumePath)))
 
-        if ext.lower() == ".pdb":
-            parser = PDBParser(QUIET=True)
-            structure = parser.get_structure(name, structure)
+        io = MMCIFIO()
 
-            io = MMCIFIO()
+        for i, (record, chain) in enumerate(zip(records, chains), start=1):
+            seqId = record.id.split("|")[0].strip().lower().split("_")[0].upper()
+            folder = os.path.join(af3Base, f"{seqId}_{i}")
+            os.makedirs(folder, exist_ok=True)
+            outPath = os.path.join(folder, f"struct_chain_{i}_model_0.cif")
             io.set_structure(structure)
-            io.save(newName)
-        else:
-            shutil.copy(structure, newName)
+            io.save(outPath, ChainSelect(chain.id))
 
-    def runMicaStep(self):
-        self.ensurePulchraExecutable()
-        seqName = os.path.abspath(self.inputSeq.get().getFileName())
-        mapFiles = (
-                glob.glob(os.path.join(self.idFolder, "*.map")) +
-                glob.glob(os.path.join(self.idFolder, "*.mrc")) +
-                glob.glob(os.path.join(self.idFolder, "*.mrc.gz"))
-        )
-
-        mapFile = mapFiles[0]
-        if self.useGpu:
-            device = f'cuda:{self.gpuList.get()}'
-        else:
-            device = 'cpu'
-        phenix = self.getPhenixEnv()
-        af3Folder = os.path.join(self.idFolder, "AF3_results")
-        args = [
-            f"-f {seqName}",
-            f"-a {os.path.abspath(af3Folder)}",
-            f"-m {os.path.abspath(mapFile)}",
-            f"-c {self.contourLevel.get()}",
-            f"-r {self.resolution.get()}",
-            f"-p {self.pulchra}",
-            f"-x {phenix}",
-            f"-d {device}"
-        ]
-        path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA')
-        Plugin.runCondaCommand(
-            self,
-            program="bash",
-            args=f'-c "PHENIX_TMP={os.path.join(self.idFolder, "phenix_tmp")} OMP_NUM_THREADS={self.numberOfThreads.get()} {os.path.join(path, "MICA_pipeline.sh")} {" ".join(args)}"',
-            condaDic=MICA_DIC,
-            cwd=path
-        )
+        self.resultsFolder = af3Base
 
     def processStructureStep(self):
         seqName = os.path.abspath(self.seqDst)
-
         af3Folder = os.path.join(self.idFolder, "AF3_results")
         args = [
             f"-f {seqName}",
@@ -198,22 +162,9 @@ class ProtMICA(EMProtocol):
             cwd=path
         )
 
-        newName = '_1'
-        structureFolder = os.path.join(self.idFolder, "AF3_structures")
-        for name in os.listdir(structureFolder):
-            old_path = os.path.join(structureFolder, name)
-
-            if os.path.isdir(old_path) and name.endswith("_0.cif"):
-                base = name[:-6]
-                new_name = base + "_1"
-                new_path = os.path.join(structureFolder, new_name)
-
-                os.rename(old_path, new_path)
-
-
     def dockInMapStep(self):
         self.ensurePulchraExecutable()
-        seqName = os.path.abspath(self.inputSeq.get().getFileName())
+        seqName = os.path.abspath(self.seqDst)
         mapFiles = (
                 glob.glob(os.path.join(self.idFolder, "*.map")) +
                 glob.glob(os.path.join(self.idFolder, "*.mrc")) +
@@ -257,7 +208,7 @@ class ProtMICA(EMProtocol):
 
     def runStep(self):
         self.ensurePulchraExecutable()
-        seqName = os.path.abspath(self.inputSeq.get().getFileName())
+        seqName = os.path.abspath(self.seqDst)
         mapFiles = (
                 glob.glob(os.path.join(self.idFolder, "*.map")) +
                 glob.glob(os.path.join(self.idFolder, "*.mrc")) +
@@ -313,7 +264,7 @@ class ProtMICA(EMProtocol):
     def createOutputStep(self):
         resultsDir = os.path.abspath(self._getPath('output'))
 
-        pdbFiles = glob.glob(os.path.join(resultsDir, "*.pdb"))
+        pdbFiles = glob.glob(os.path.join(resultsDir, "*all_atom_model.pdb"))
         if not pdbFiles:
             raise FileNotFoundError(f"No PDB file found in {resultsDir}")
         finalPdb = pdbFiles[0]
@@ -409,8 +360,8 @@ class ProtMICA(EMProtocol):
                 phenixEnv = alternativePath
             else:
                 raise FileNotFoundError(
-                    f"\nSe encontró PHENIX_HOME en '{phenixHome}', pero no se localiza "
-                    f"el archivo 'phenix_env.sh' necesario para inicializarlo.\n"
+                    f"\nFound PHENIX_HOME in '{phenixHome}', but not "
+                    f"'phenix_env.sh'\n"
                 )
         return phenixEnv
 
