@@ -52,8 +52,119 @@ class ChainSelect(Select):
 
 class ProtMICA(EMProtocol):
     """
+      AI Generated:
 
-    """
+      This protocol performs protein structure modeling from cryo-EM density maps
+      using the MICA framework. It combines an experimental electron density map,
+      a target amino acid sequence, and an AlphaFold3-predicted structure to
+      generate a refined all-atom model fitted into the density map.
+
+      The protocol prepares AlphaFold3 predictions, docks them into the input
+      cryo-EM map, refines the structure using MICA and external modeling tools,
+      and produces a final fitted atomic structure suitable for downstream
+      structural biology analyses.
+
+      Core Concepts
+      -------------
+      MICA:
+          Deep learning-based framework for protein model building and refinement
+          from cryo-EM density maps. It integrates predicted structures with
+          experimental density information to improve structural accuracy.
+
+      AlphaFold3 Predictions:
+          Initial structural models used as starting templates. Individual chains
+          are extracted and organized into the format required by MICA.
+
+      Cryo-EM Density Map:
+          Experimental electron density map (MRC/MAP format) providing spatial
+          information used to guide model fitting and refinement.
+
+      Docking and Refinement:
+          AlphaFold-derived models are first positioned inside the density map
+          and subsequently refined through MICA, Pulchra reconstruction, and
+          PHENIX-based refinement procedures.
+
+      Workflow
+      --------
+      1. Import the cryo-EM density map.
+      2. Import the target protein sequence.
+      3. Import an AlphaFold3-predicted structure.
+      4. Split the AF3 model into individual chains.
+      5. Organize AF3 outputs in the directory structure expected by MICA.
+      6. Process AF3 predictions and sequence information.
+      7. Dock predicted chains into the density map.
+      8. Run MICA structure reconstruction and refinement.
+      9. Perform optional PHENIX-based refinement.
+      10. Generate a final all-atom protein model.
+
+      Input
+      -----
+      - inputVolume:
+          Cryo-EM density map in MRC/MAP format.
+
+      - resolution:
+          Experimental map resolution in Ångstroms.
+
+      - contourLevel:
+          Density threshold used during docking and model building.
+
+      - inputSeq:
+          Target protein sequence in FASTA format.
+
+      - inputStructure:
+          AlphaFold3-predicted protein structure used as an initial template.
+
+      External Dependencies
+      ---------------------
+      - MICA
+          Main modeling framework.
+
+      - PHENIX
+          Required for map-guided refinement. The PHENIX_HOME environment
+          variable must be configured in Scipion.
+
+      - Pulchra
+          Used for backbone reconstruction and all-atom rebuilding.
+
+      Output
+      ------
+      - outputAtomStruct:
+          Refined all-atom protein structure fitted into the cryo-EM map,
+          returned as an AtomStruct object.
+
+      Generated Files
+      ---------------
+      The protocol creates intermediate directories containing:
+
+      - Processed AlphaFold3 chain models
+      - Docked chain structures
+      - MICA reconstruction outputs
+      - PHENIX refinement results
+      - Final all-atom PDB model
+
+      Use Cases
+      ---------
+      - Building atomic models from cryo-EM maps
+      - Refining AlphaFold3 predictions using experimental density
+      - Structural interpretation of cryo-EM reconstructions
+      - Improving protein models prior to downstream analyses
+        such as docking, molecular dynamics, or functional studies
+      - Integrating AI-predicted structures with experimental data
+
+      Notes
+      -----
+      - The protocol assumes the AlphaFold3 structure and input sequence
+        correspond to the same biological target.
+
+      - PHENIX must be installed and accessible through the PHENIX_HOME
+        environment variable.
+
+      - GPU execution is supported and recommended for large systems.
+
+      - Multi-chain AlphaFold3 models are automatically separated and
+        processed individually before reconstruction.
+      """
+
     _label = 'protein modelling'
     stepsExecutionMode = params.STEPS_PARALLEL
     pulchra = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA/modules/pulchra304/bin/linux/pulchra')
