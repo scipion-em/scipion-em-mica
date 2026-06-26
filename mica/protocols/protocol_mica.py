@@ -234,7 +234,7 @@ class ProtMICA(EMProtocol):
             seqSrc = os.path.join(idFolder, f"{name}.fasta")
 
             with open(seqSrc, "w") as f:
-                f.write(f">{name}|Chains A|{name}|Unknown organism\n")
+                f.write(f">{name}_1|Chains A|Unknown organism\n")
                 f.write(f"{seq}\n")
 
         structurePath = os.path.abspath(self.inputStructure.get().getFileName())
