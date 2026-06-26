@@ -225,7 +225,18 @@ class ProtMICA(EMProtocol):
         idFolder = os.path.join(baseFolder, "0")
         os.makedirs(idFolder, exist_ok=True)
 
-        seqSrc = os.path.abspath(self.inputSeq.get().getFileName())
+        if self.inputSeq.get().getFileName() is not None:
+            seqSrc = os.path.abspath(self.inputSeq.get().getFileName())
+            shutil.copyfile(seqSrc, os.path.join(idFolder, os.path.basename(seqSrc)))
+        else:
+            seq = self.inputSeq.get().getSequence()
+            name = self.inputSeq.get().getSeqName()
+            seqSrc = os.path.join(idFolder, f"{name}.fasta")
+
+            with open(seqSrc, "w") as f:
+                f.write(f">{name}|Chains A|{name}|Unknown organism\n")
+                f.write(f"{seq}\n")
+
         structurePath = os.path.abspath(self.inputStructure.get().getFileName())
         volumePath = os.path.abspath(self.inputVolume.get().getFileName())
 
@@ -239,8 +250,7 @@ class ProtMICA(EMProtocol):
 
         chains = list(model.get_chains())
         records = list(SeqIO.parse(seqSrc, "fasta"))
-        
-        shutil.copyfile(seqSrc, os.path.join(idFolder, os.path.basename(seqSrc)))
+
         self.seqDst = seqSrc
         self.idFolder = idFolder
         shutil.copyfile(volumePath, os.path.join(idFolder, os.path.basename(volumePath)))
