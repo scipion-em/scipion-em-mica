@@ -275,9 +275,11 @@ class ProtMICA(EMProtocol):
             f"-a {os.path.abspath(af3Folder)}"
         ]
         path = os.path.join(Plugin.getVar(MICA_DIC['home']), 'MICA')
+        gpu = self.gpuList.get()
+        program = f"export CUDA_VISIBLE_DEVICES={gpu} && python"
         Plugin.runCondaCommand(
             self,
-            program="python",
+            program=program,
             args=f"{os.path.join(path, 'utils/process_AF3_results.py')} " + " ".join(args),
             condaDic=MICA_DIC,
             cwd=path
@@ -307,6 +309,7 @@ class ProtMICA(EMProtocol):
 
         phenixTmp = os.path.abspath(os.path.join(self.idFolder, "phenix_tmp"))
         threads = self.numberOfThreads.get()
+        gpu = self.gpuList.get()
 
         cmd = (
                 f'mkdir -p "{phenixTmp}" && '
@@ -316,6 +319,7 @@ class ProtMICA(EMProtocol):
                 f'MKL_NUM_THREADS={threads} '
                 f'NUMEXPR_NUM_THREADS={threads} '
                 f'taskset -c 0-{threads - 1} '
+                f'export CUDA_VISIBLE_DEVICES={gpu} && '
                 f'python {os.path.join(path, "dock_in_map.py")} ' + " ".join(args)
         )
 
