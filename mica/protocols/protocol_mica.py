@@ -314,12 +314,12 @@ class ProtMICA(EMProtocol):
         cmd = (
                 f'mkdir -p "{phenixTmp}" && '
                 f'export PHENIX_TMP="{phenixTmp}" && '
+                f'export CUDA_VISIBLE_DEVICES={self.gpuList.get()} && '
                 f'OMP_NUM_THREADS={threads} '
                 f'OPENBLAS_NUM_THREADS={threads} '
                 f'MKL_NUM_THREADS={threads} '
                 f'NUMEXPR_NUM_THREADS={threads} '
                 f'taskset -c 0-{threads - 1} '
-                f'export CUDA_VISIBLE_DEVICES={gpu} && '
                 f'python {os.path.join(path, "dock_in_map.py")} ' + " ".join(args)
         )
 
